@@ -18,13 +18,13 @@ import requests
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-MAKE_WEBHOOK_URL = os.environ["MAKE_WEBHOOK_URL"]
-SHOPIFY_BLOG_ID = os.environ["SHOPIFY_BLOG_ID"]
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"].strip()
+MAKE_WEBHOOK_URL = os.environ["MAKE_WEBHOOK_URL"].strip()
+SHOPIFY_BLOG_ID = os.environ["SHOPIFY_BLOG_ID"].strip()
 
 # Optional – set these to enable live product fetching from Shopify
-SHOPIFY_STORE_DOMAIN = os.environ.get("SHOPIFY_STORE_DOMAIN")  # e.g. "your-store.myshopify.com"
-SHOPIFY_STOREFRONT_TOKEN = os.environ.get("SHOPIFY_STOREFRONT_TOKEN")
+SHOPIFY_STORE_DOMAIN = (os.environ.get("SHOPIFY_STORE_DOMAIN") or "").strip() or None
+SHOPIFY_STOREFRONT_TOKEN = (os.environ.get("SHOPIFY_STOREFRONT_TOKEN") or "").strip() or None
 
 DISCOUNT_CODE = "GETMOVING20"
 
