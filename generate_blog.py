@@ -26,6 +26,7 @@ SHOPIFY_BLOG_ID = os.environ["SHOPIFY_BLOG_ID"].strip()
 SHOPIFY_STORE_DOMAIN = (os.environ.get("SHOPIFY_STORE_DOMAIN") or "").strip() or None
 SHOPIFY_STOREFRONT_TOKEN = (os.environ.get("SHOPIFY_STOREFRONT_TOKEN") or "").strip() or None
 
+BLOG_AUTHOR = os.environ.get("BLOG_AUTHOR", "StridePad").strip()
 DISCOUNT_CODE = "GETMOVING20"
 
 # Fallback / default product catalog (used when Storefront API is unavailable)
@@ -260,6 +261,7 @@ def publish_to_shopify(post: dict) -> None:
         "tags": post["tags"],
         "meta_description": post["meta_description"],
         "blog_id": SHOPIFY_BLOG_ID,
+        "author": BLOG_AUTHOR,
     }
 
     resp = requests.post(MAKE_WEBHOOK_URL, json=payload, timeout=30)
