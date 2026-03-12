@@ -1,0 +1,32 @@
+name: Daily Blog Post
+
+on:
+  schedule:
+    # Runs every day at 8:00 AM UTC
+    - cron: "0 8 * * *"
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  generate-blog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate and publish blog post
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
+          SHOPIFY_BLOG_ID: ${{ secrets.SHOPIFY_BLOG_ID }}
+          SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
+          SHOPIFY_STOREFRONT_TOKEN: ${{ secrets.SHOPIFY_STOREFRONT_TOKEN }}
+        run: python generate_blog.py
