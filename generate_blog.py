@@ -69,6 +69,14 @@ STOREFRONT_QUERY = """
         productType
         tags
         onlineStoreUrl
+        images(first: 1) {
+          edges {
+            node {
+              url
+              altText
+            }
+          }
+        }
       }
     }
   }
@@ -108,6 +116,15 @@ def fetch_shopify_products() -> list[dict]:
             else:
                 price_str = f"from ${min_price:.2f}"
 
+            # Extract first product image if available
+            image_url = ""
+            image_alt = ""
+            images = node.get("images", {}).get("edges", [])
+            if images:
+                image_node = images[0]["node"]
+                image_url = image_node.get("url", "")
+                image_alt = image_node.get("altText", "") or node["title"]
+
             products.append({
                 "title": node["title"],
                 "price": price_str,
@@ -115,6 +132,8 @@ def fetch_shopify_products() -> list[dict]:
                 "product_type": node.get("productType", ""),
                 "tags": node.get("tags", []),
                 "url": node.get("onlineStoreUrl", ""),
+                "image_url": image_url,
+                "image_alt": image_alt,
             })
 
         if not products:
@@ -183,9 +202,16 @@ def generate_blog_post(topic: str, featured_products: list[dict]) -> dict:
 
     Returns a dict with keys: title, body_html, tags, meta_description.
     """
-    product_lines = "\n".join(
-        f"  - {p['title']} ({p['price']})" for p in featured_products
-    )
+    product_lines = []
+    for p in featured_products:
+        line = f"  - {p['title']} ({p['price']})"
+        if p.get("image_url"):
+            line += f"\n    Image URL: {p['image_url']}"
+            line += f"\n    Image Alt: {p.get('image_alt', p['title'])}"
+        if p.get("url"):
+            line += f"\n    Product URL: {p['url']}"
+        product_lines.append(line)
+    product_lines = "\n".join(product_lines)
 
     prompt = f"""You are a content writer for a trendy online fitness store targeting young
 fitness enthusiasts aged 18-30. Write in a fun, relatable Gen-Z tone — use casual
@@ -210,6 +236,12 @@ REQUIREMENTS:
 7. Naturally mention the featured products with their prices in the body.
 8. Include the discount code {DISCOUNT_CODE} once in a natural, non-pushy way.
 9. End with a short call-to-action.
+10. For each product that has an Image URL, embed the image in the blog using an <img> tag
+    near where you mention the product. Use this format:
+    <img src="IMAGE_URL" alt="IMAGE_ALT" style="max-width:100%;border-radius:12px;margin:16px 0;" />
+    If a Product URL is provided, wrap the image in a link: <a href="PRODUCT_URL"><img ... /></a>
+    Place images naturally within the content — after introducing the product or in a dedicated
+    product highlight section. Do NOT group all images at the top or bottom.
 
 Respond ONLY with valid JSON in this exact format (no markdown fences):
 {{
