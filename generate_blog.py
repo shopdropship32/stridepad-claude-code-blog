@@ -3,7 +3,7 @@
 Daily SEO-optimized blog post generator for a fitness e-commerce store.
 
 Uses Claude API to generate Gen-Z-toned blog posts, fetches live products
-from the Shopify Storefront API, and publishes via a Make.com webhook.
+from the Shopify public product feed, and publishes via a Make.com webhook.
 """
 
 import json
@@ -22,9 +22,8 @@ ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"].strip()
 MAKE_WEBHOOK_URL = os.environ["MAKE_WEBHOOK_URL"].strip()
 SHOPIFY_BLOG_ID = os.environ["SHOPIFY_BLOG_ID"].strip()
 
-# Optional – set these to enable live product fetching from Shopify
+# Store domain for live product fetching (no API token needed)
 SHOPIFY_STORE_DOMAIN = (os.environ.get("SHOPIFY_STORE_DOMAIN") or "").strip() or None
-SHOPIFY_STOREFRONT_TOKEN = (os.environ.get("SHOPIFY_STOREFRONT_TOKEN") or "").strip() or None
 
 BLOG_AUTHOR = os.environ.get("BLOG_AUTHOR", "StridePad").strip()
 DISCOUNT_CODE = "GETMOVING20"
@@ -47,104 +46,72 @@ DEFAULT_PRODUCTS = [
 
 
 # ---------------------------------------------------------------------------
-# Shopify Storefront API – live product fetching
+# Shopify public product feed – no API token required
 # ---------------------------------------------------------------------------
-STOREFRONT_QUERY = """
-{
-  products(first: 50) {
-    edges {
-      node {
-        title
-        description
-        priceRange {
-          minVariantPrice {
-            amount
-            currencyCode
-          }
-          maxVariantPrice {
-            amount
-            currencyCode
-          }
-        }
-        productType
-        tags
-        onlineStoreUrl
-        images(first: 1) {
-          edges {
-            node {
-              url
-              altText
-            }
-          }
-        }
-      }
-    }
-  }
-}
-"""
-
-
 def fetch_shopify_products() -> list[dict]:
-    """Fetch products from the Shopify Storefront API.
+    """Fetch products from the store's public /products.json endpoint.
 
-    Returns a list of product dicts with 'title' and 'price' keys.
-    Falls back to DEFAULT_PRODUCTS if the API is not configured or fails.
+    Every Shopify store exposes this endpoint publicly. No API tokens needed.
+    Falls back to DEFAULT_PRODUCTS if the store domain is not set or the request fails.
     """
-    if not SHOPIFY_STORE_DOMAIN or not SHOPIFY_STOREFRONT_TOKEN:
-        print("Shopify Storefront API not configured – using default catalog.")
+    if not SHOPIFY_STORE_DOMAIN:
+        print("SHOPIFY_STORE_DOMAIN not set – using default catalog.")
         return DEFAULT_PRODUCTS
 
-    url = f"https://{SHOPIFY_STORE_DOMAIN}/api/2024-01/graphql.json"
-    headers = {
-        "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
-    }
+    url = f"https://{SHOPIFY_STORE_DOMAIN}/products.json?limit=50"
 
     try:
-        resp = requests.post(url, json={"query": STOREFRONT_QUERY}, headers=headers, timeout=15)
+        resp = requests.get(url, timeout=15)
         resp.raise_for_status()
         data = resp.json()
 
         products = []
-        for edge in data["data"]["products"]["edges"]:
-            node = edge["node"]
-            min_price = float(node["priceRange"]["minVariantPrice"]["amount"])
-            max_price = float(node["priceRange"]["maxVariantPrice"]["amount"])
-
-            if min_price == max_price:
-                price_str = f"${min_price:.2f}"
+        for product in data.get("products", []):
+            # Get price from first variant
+            variants = product.get("variants", [])
+            if variants:
+                prices = [float(v.get("price", 0)) for v in variants if v.get("price")]
+                min_price = min(prices) if prices else 0
+                max_price = max(prices) if prices else 0
+                if min_price == max_price:
+                    price_str = f"${min_price:.2f}"
+                else:
+                    price_str = f"from ${min_price:.2f}"
             else:
-                price_str = f"from ${min_price:.2f}"
+                price_str = ""
 
-            # Extract first product image if available
+            # Get first image
             image_url = ""
             image_alt = ""
-            images = node.get("images", {}).get("edges", [])
+            images = product.get("images", [])
             if images:
-                image_node = images[0]["node"]
-                image_url = image_node.get("url", "")
-                image_alt = image_node.get("altText", "") or node["title"]
+                image_url = images[0].get("src", "")
+                image_alt = images[0].get("alt") or product.get("title", "")
+
+            # Build product URL from handle
+            handle = product.get("handle", "")
+            product_url = f"https://{SHOPIFY_STORE_DOMAIN}/products/{handle}" if handle else ""
 
             products.append({
-                "title": node["title"],
+                "title": product.get("title", ""),
                 "price": price_str,
-                "description": node.get("description", ""),
-                "product_type": node.get("productType", ""),
-                "tags": node.get("tags", []),
-                "url": node.get("onlineStoreUrl", ""),
+                "description": product.get("body_html", ""),
+                "product_type": product.get("product_type", ""),
+                "tags": product.get("tags", "").split(", ") if isinstance(product.get("tags"), str) else product.get("tags", []),
+                "url": product_url,
                 "image_url": image_url,
                 "image_alt": image_alt,
             })
 
         if not products:
-            print("Storefront API returned no products – using default catalog.")
+            print("Store returned no products – using default catalog.")
             return DEFAULT_PRODUCTS
 
-        print(f"Fetched {len(products)} products from Shopify Storefront API.")
+        print(f"Fetched {len(products)} products from {SHOPIFY_STORE_DOMAIN}/products.json")
         return products
 
     except Exception as exc:
-        print(f"Storefront API error: {exc} – using default catalog.")
+        print(f"Product fetch error: {exc} – using default catalog.")
         return DEFAULT_PRODUCTS
 
 
